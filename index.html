@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Guide: RHEL 9 Root Password Reset</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chosen Palette: Slate Gray and Tech Blue -->
+    <!-- Application Structure Plan: A single-page, vertical, step-by-step interactive guide. This structure was chosen because the source report details a linear, procedural task. A guided walkthrough is the most intuitive and user-friendly way to present this information, allowing users to follow along sequentially. Key interactions include a sticky navigation bar for quick scrolling, one-click copy buttons for commands to minimize user error, and informational popovers for technical terms to provide context without cluttering the main text. This design transforms a static document into an actionable tool. -->
+    <!-- Visualization & Content Choices: The core of the report is the sequence of commands and system states. Goal: Guide the user. Presentation: Each step is a styled 'card' with descriptive text and a 'faux-terminal' block for commands. Interaction: The primary interaction is the 'copy to clipboard' button for each command. Secondary interaction is hovering over info icons to get definitions of terms like 'chroot' and 'SELinux'. Justification: This approach makes the guide practical and reduces the chance of typos. It presents the technical information clearly and provides help on demand. Library/Method: Vanilla JavaScript for interactions (copy/popovers), Tailwind CSS for styling. No charts are needed as there is no quantitative data. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        .font-mono {
+            font-family: 'Roboto Mono', monospace;
+        }
+        .info-popover {
+            display: none;
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+        .info-icon:hover + .info-popover, .info-popover:hover {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-20 border-b border-slate-200">
+        <nav class="container mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+                <h1 class="text-xl md:text-2xl font-bold text-slate-900">RHEL 9 Password Reset Guide</h1>
+                <div class="hidden md:flex items-center space-x-4">
+                    <a href="#introduction" class="text-slate-600 hover:text-blue-600 transition-colors">Intro</a>
+                    <a href="#procedure" class="text-slate-600 hover:text-blue-600 transition-colors">Procedure</a>
+                    <a href="#step-1" class="text-sm text-slate-500 hover:text-blue-600 transition-colors">Step 1</a>
+                    <a href="#step-4" class="text-sm text-slate-500 hover:text-blue-600 transition-colors">Step 4</a>
+                    <a href="#step-6" class="text-sm text-slate-500 hover:text-blue-600 transition-colors">Step 6</a>
+                    <a href="#conclusion" class="text-slate-600 hover:text-blue-600 transition-colors">Conclusion</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto px-4 py-8 md:py-12">
+
+        <section id="introduction" class="mb-16 scroll-mt-20">
+            <div class="max-w-4xl mx-auto text-center">
+                <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Gaining Root Access on RHEL 9.3</h2>
+                <p class="text-lg text-slate-600">This interactive guide demonstrates the critical system administration skill of resetting the root user's password on Red Hat Enterprise Linux. Following these steps allows you to regain administrative control of a system when the password is lost, without needing to reinstall the entire OS. This walkthrough simplifies the process, providing clear instructions and one-click commands.</p>
+            </div>
+        </section>
+        
+        <section id="procedure" class="mb-16 scroll-mt-20">
+            <div class="max-w-4xl mx-auto">
+                <div class="text-center mb-12">
+                     <h2 class="text-3xl font-bold text-slate-900 mb-2">The Procedure: An Overview</h2>
+                     <p class="text-slate-600">The process involves interrupting the normal boot sequence to access an emergency shell. From there, we'll gain write access to the system files, switch into the system's environment, and securely set a new password before rebooting.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+                    <div class="bg-white p-4 rounded-lg border border-slate-200">
+                        <span class="text-3xl">🔑</span>
+                        <h3 class="font-semibold mt-2">1. Interrupt Boot</h3>
+                        <p class="text-sm text-slate-500">Edit GRUB boot parameters.</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border border-slate-200">
+                         <span class="text-3xl">🔧</span>
+                        <h3 class="font-semibold mt-2">2. Gain Access</h3>
+                         <p class="text-sm text-slate-500">Remount filesystem as writable.</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border border-slate-200">
+                        <span class="text-3xl">🔄</span>
+                        <h3 class="font-semibold mt-2">3. Change Password</h3>
+                        <p class="text-sm text-slate-500">Use `passwd` in a chroot environment.</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border border-slate-200">
+                         <span class="text-3xl">🏷️</span>
+                        <h3 class="font-semibold mt-2">4. Relabel & Reboot</h3>
+                         <p class="text-sm text-slate-500">Update SELinux context and restart.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="max-w-3xl mx-auto space-y-12">
+            
+            <div id="step-1" class="scroll-mt-20">
+                <h3 class="text-2xl font-bold text-slate-900 mb-4"><span class="text-blue-600">Step 1 & 2:</span> Reboot and Modify Kernel Parameters</h3>
+                <p class="text-slate-600 mb-4">First, reboot the machine and interrupt the GRUB bootloader by pressing the `e` key. In the editor, find the line starting with `linux` and append the following parameter to the end of it. This tells the system to break the boot process and launch an emergency shell.</p>
+                <div class="relative">
+                    <p class="font-semibold text-slate-600">Parameter to add:</p>
+                    <div class="bg-slate-800 rounded-lg p-4 my-2 text-white font-mono text-sm group">
+                        <code>rd.break</code>
+                        <div class="absolute top-2 right-2">
+                             <button onclick="copyToClipboard('rd.break')" class="opacity-50 group-hover:opacity-100 bg-slate-700 hover:bg-slate-600 text-white py-1 px-2 rounded-md transition-opacity text-xs">Copy</button>
+                        </div>
+                    </div>
+                </div>
+                 <div class="relative inline-block">
+                    <span class="info-icon cursor-pointer text-blue-600 font-medium">What is rd.break?</span>
+                    <div class="info-popover bg-slate-800 text-white text-sm rounded-lg p-3 w-64 shadow-lg">
+                        This kernel command line argument interrupts the boot process at the `initramfs` stage, before the system root filesystem is mounted. This is crucial for maintenance tasks like password resets.
+                    </div>
+                </div>
+                <p class="text-slate-600 mt-4">After adding the parameter, press `Ctrl+x` to continue booting.</p>
+            </div>
+
+            <div id="step-3" class="scroll-mt-20">
+                <h3 class="text-2xl font-bold text-slate-900 mb-4"><span class="text-blue-600">Step 3:</span> Access the Emergency Shell</h3>
+                <p class="text-slate-600 mb-4">The system will boot into an emergency shell. The root filesystem is mounted under `/sysroot` but in read-only mode. You'll see a prompt like `switch_root:/#`.</p>
+            </div>
+
+            <div id="step-4" class="scroll-mt-20">
+                <h3 class="text-2xl font-bold text-slate-900 mb-4"><span class="text-blue-600">Step 4:</span> Remount Filesystem with Read-Write Permissions</h3>
+                <p class="text-slate-600 mb-4">To make any changes, you must remount the filesystem in read-write mode. Use the following command.</p>
+                <div class="bg-slate-800 rounded-lg overflow-hidden group">
+                    <div class="p-4">
+                        <code class="text-green-400 font-mono text-sm"># </code><code id="cmd1" class="text-white font-mono text-sm">mount -o remount,rw /sysroot</code>
+                    </div>
+                    <div class="absolute top-2 right-2">
+                        <button onclick="copyToClipboard(document.getElementById('cmd1').innerText)" class="opacity-50 group-hover:opacity-100 bg-slate-700 hover:bg-slate-600 text-white py-1 px-2 rounded-md transition-opacity text-xs">Copy</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="step-5" class="scroll-mt-20">
+                <h3 class="text-2xl font-bold text-slate-900 mb-4"><span class="text-blue-600">Step 5:</span> Enter the `chroot` Environment</h3>
+                <p class="text-slate-600 mb-4">Now, switch into the system's environment. This makes `/sysroot` the new root (`/`) of your shell, allowing you to run commands as if you were on the fully booted system.</p>
+                 <div class="bg-slate-800 rounded-lg overflow-hidden group">
+                    <div class="p-4">
+                        <code class="text-green-400 font-mono text-sm"># </code><code id="cmd2" class="text-white font-mono text-sm">chroot /sysroot</code>
+                    </div>
+                    <div class="absolute top-2 right-2">
+                        <button onclick="copyToClipboard(document.getElementById('cmd2').innerText)" class="opacity-50 group-hover:opacity-100 bg-slate-700 hover:bg-slate-600 text-white py-1 px-2 rounded-md transition-opacity text-xs">Copy</button>
+                    </div>
+                </div>
+                 <div class="relative inline-block mt-2">
+                    <span class="info-icon cursor-pointer text-blue-600 font-medium">What is chroot?</span>
+                    <div class="info-popover bg-slate-800 text-white text-sm rounded-lg p-3 w-64 shadow-lg">
+                        `chroot` (change root) is a command that changes the apparent root directory for the current running process and its children. It's like being 'jailed' in a new environment, essential for system recovery.
+                    </div>
+                </div>
+            </div>
+
+            <div id="step-6" class="scroll-mt-20">
+                <h3 class="text-2xl font-bold text-slate-900 mb-4"><span class="text-blue-600">Step 6:</span> Change the Root Password</h3>
+                <p class="text-slate-600 mb-4">With access to the system, you can now change the root password using the `passwd` command. The system will prompt you to enter and confirm the new password.</p>
+                 <div class="bg-slate-800 rounded-lg overflow-hidden group">
+                    <div class="p-4">
+                        <code class="text-green-400 font-mono text-sm"># </code><code id="cmd3" class="text-white font-mono text-sm">passwd root</code>
+                    </div>
+                    <div class="absolute top-2 right-2">
+                        <button onclick="copyToClipboard(document.getElementById('cmd3').innerText)" class="opacity-50 group-hover:opacity-100 bg-slate-700 hover:bg-slate-600 text-white py-1 px-2 rounded-md transition-opacity text-xs">Copy</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="step-7" class="scroll-mt-20">
+                <h3 class="text-2xl font-bold text-slate-900 mb-4"><span class="text-blue-600">Step 7:</span> Update SELinux Context (Crucial)</h3>
+                <p class="text-slate-600 mb-4">Because the `/etc/shadow` file (which stores passwords) was modified outside of a normal system session, you must tell SELinux to relabel all files on the next boot. This prevents login problems. Skipping this step will likely lock you out of the system again.</p>
+                 <div class="bg-slate-800 rounded-lg overflow-hidden group">
+                    <div class="p-4">
+                        <code class="text-green-400 font-mono text-sm"># </code><code id="cmd4" class="text-white font-mono text-sm">touch /.autorelabel</code>
+                    </div>
+                    <div class="absolute top-2 right-2">
+                        <button onclick="copyToClipboard(document.getElementById('cmd4').innerText)" class="opacity-50 group-hover:opacity-100 bg-slate-700 hover:bg-slate-600 text-white py-1 px-2 rounded-md transition-opacity text-xs">Copy</button>
+                    </div>
+                </div>
+                 <div class="relative inline-block mt-2">
+                    <span class="info-icon cursor-pointer text-blue-600 font-medium">Why is this crucial?</span>
+                    <div class="info-popover bg-slate-800 text-white text-sm rounded-lg p-3 w-64 shadow-lg">
+                        SELinux uses labels on files to enforce security policies. Modifying a file in this recovery mode doesn't update its label. The `.autorelabel` file forces a system-wide relabel on boot, correcting any inconsistencies and ensuring the security policy allows you to log in.
+                    </div>
+                </div>
+            </div>
+
+            <div id="step-8" class="scroll-mt-20">
+                <h3 class="text-2xl font-bold text-slate-900 mb-4"><span class="text-blue-600">Step 8:</span> Exit and Reboot</h3>
+                <p class="text-slate-600 mb-4">Finally, exit the `chroot` environment and then the emergency shell. This will cause the system to reboot. </p>
+                 <div class="bg-slate-800 rounded-lg overflow-hidden group">
+                    <div class="p-4">
+                        <code class="text-green-400 font-mono text-sm"># </code><code id="cmd5" class="text-white font-mono text-sm">exit</code><br>
+                        <code class="text-green-400 font-mono text-sm"># </code><code id="cmd6" class="text-white font-mono text-sm">exit</code>
+                    </div>
+                    <div class="absolute top-2 right-2">
+                        <button onclick="copyToClipboard('exit\nexit')" class="opacity-50 group-hover:opacity-100 bg-slate-700 hover:bg-slate-600 text-white py-1 px-2 rounded-md transition-opacity text-xs">Copy</button>
+                    </div>
+                </div>
+                 <p class="text-slate-600 mt-4">The SELinux relabeling process will run on the next boot, which might take a few minutes. After it completes, the system will reboot once more, and you can log in with your new root password.</p>
+            </div>
+
+        </div>
+
+        <section id="conclusion" class="mt-20 scroll-mt-20 border-t border-slate-200 pt-12">
+            <div class="max-w-4xl mx-auto text-center">
+                <h2 class="text-3xl font-bold text-slate-900 mb-4">Conclusion & Key Takeaway</h2>
+                <p class="text-lg text-slate-600 mb-4">This guide successfully demonstrated the standard procedure for resetting a lost root password. By interrupting the bootloader and using a `chroot` environment, administrative access can be restored securely and efficiently.</p>
+                <div class="bg-amber-100 border-l-4 border-amber-500 text-amber-800 p-4 rounded-r-lg text-left">
+                    <p><strong class="font-bold">A Note on Security:</strong> This entire process highlights the critical importance of physical machine security. Anyone with direct console access to a server can perform these actions. Securing access to the physical hardware and bootloader is a fundamental layer of system security.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="text-center py-8 border-t border-slate-200 mt-12">
+        <p class="text-slate-500">Interactive Guide created from Project Report by Mohnish Kumar.</p>
+    </footer>
+    
+    <div id="copy-notification" class="fixed bottom-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg transition-opacity opacity-0">
+        Command copied to clipboard!
+    </div>
+
+    <script>
+        function copyToClipboard(text) {
+            if (!navigator.clipboard) {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showNotification();
+                } catch (err) {
+                    console.error('Fallback: Oops, unable to copy', err);
+                }
+                document.body.removeChild(textArea);
+                return;
+            }
+            navigator.clipboard.writeText(text).then(function() {
+                showNotification();
+            }, function(err) {
+                console.error('Async: Could not copy text: ', err);
+            });
+        }
+
+        function showNotification() {
+            const notification = document.getElementById('copy-notification');
+            notification.classList.remove('opacity-0');
+            notification.classList.add('opacity-100');
+            setTimeout(() => {
+                notification.classList.remove('opacity-100');
+                notification.classList.add('opacity-0');
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
